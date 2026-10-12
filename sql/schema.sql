@@ -1,0 +1,10 @@
+CREATE TABLE tb_user (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '用户ID',
+    username VARCHAR(32) NOT NULL COMMENT '用户名',
+    gender TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '性别：0未知，1男，2女',
+    phone VARCHAR(11) NOT NULL COMMENT '手机号',
+    create_time DATETIME NOT NULL COMMENT '创建时间',
+    update_time DATETIME NOT NULL COMMENT '修改时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_phone (phone)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
