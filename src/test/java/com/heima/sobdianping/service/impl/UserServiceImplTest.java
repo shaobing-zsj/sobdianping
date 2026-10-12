@@ -18,7 +18,6 @@ import org.springframework.http.HttpStatus;
 
 import java.security.SecureRandom;
 import java.time.Duration;
-import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -31,7 +30,6 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -128,23 +126,26 @@ class UserServiceImplTest {
         when(valueOperations.get("login:code:+8613800138000")).thenReturn("123456");
         when(userMapper.selectOne(any())).thenReturn(user);
         when(uuidSupplier.get()).thenReturn(uuid);
-        when(stringRedisTemplate.expire(
-                "login:token:" + uuid,
-                Duration.ofMinutes(30)
-        )).thenReturn(true);
+        when(stringRedisTemplate.execute(
+                any(),
+                eq(java.util.List.of("login:token:" + uuid)),
+                eq("1001"),
+                eq("13800138000"),
+                eq("1800")
+        )).thenReturn(1L);
         when(stringRedisTemplate.execute(any(), anyList(), eq("123456"))).thenReturn(1L);
 
         LoginVO result = userService.login(loginDTO);
 
         assertEquals(uuid.toString(), result.getToken());
-        verify(hashOperations).putAll(
-                "login:token:" + uuid,
-                Map.of("id", "1001", "phone", "13800138000")
+        verify(stringRedisTemplate).execute(
+                any(),
+                eq(java.util.List.of("login:token:" + uuid)),
+                eq("1001"),
+                eq("13800138000"),
+                eq("1800")
         );
-        verify(stringRedisTemplate).expire(
-                "login:token:" + uuid,
-                Duration.ofMinutes(30)
-        );
+        verify(hashOperations, never()).putAll(anyString(), anyMap());
         verify(userMapper, never()).insert(any(User.class));
     }
 
@@ -160,8 +161,9 @@ class UserServiceImplTest {
             return 1;
         });
         when(uuidSupplier.get()).thenReturn(uuid);
-        when(stringRedisTemplate.expire(anyString(), eq(Duration.ofMinutes(30))))
-                .thenReturn(true);
+        when(stringRedisTemplate.execute(
+                any(), anyList(), eq("2002"), eq("13900139000"), eq("1800")
+        )).thenReturn(1L);
         when(stringRedisTemplate.execute(any(), anyList(), eq("123456"))).thenReturn(1L);
 
         userService.login(loginDTO);
@@ -182,8 +184,9 @@ class UserServiceImplTest {
         when(valueOperations.get("login:code:+8613800138000")).thenReturn("123456");
         when(userMapper.selectOne(any())).thenReturn(user);
         when(uuidSupplier.get()).thenReturn(UUID.randomUUID());
-        doThrow(new IllegalStateException("write failed"))
-                .when(hashOperations).putAll(anyString(), anyMap());
+        when(stringRedisTemplate.execute(
+                any(), anyList(), eq("1001"), eq("13800138000"), eq("1800")
+        )).thenThrow(new IllegalStateException("write failed"));
 
         assertThrows(IllegalStateException.class, () -> userService.login(loginDTO));
 
@@ -201,16 +204,18 @@ class UserServiceImplTest {
         when(userMapper.selectOne(any())).thenReturn(null, concurrentUser);
         when(userMapper.insert(any(User.class))).thenThrow(new DuplicateKeyException("uk_phone"));
         when(uuidSupplier.get()).thenReturn(uuid);
-        when(stringRedisTemplate.expire(anyString(), eq(Duration.ofMinutes(30))))
-                .thenReturn(true);
+        when(stringRedisTemplate.execute(
+                any(), eq(java.util.List.of("login:token:" + uuid)),
+                eq("3003"), eq("13700137000"), eq("1800")
+        )).thenReturn(1L);
         when(stringRedisTemplate.execute(any(), anyList(), eq("123456"))).thenReturn(1L);
 
         LoginVO result = userService.login(loginDTO);
 
         assertEquals(uuid.toString(), result.getToken());
-        verify(hashOperations).putAll(
-                "login:token:" + uuid,
-                Map.of("id", "3003", "phone", "13700137000")
+        verify(stringRedisTemplate).execute(
+                any(), eq(java.util.List.of("login:token:" + uuid)),
+                eq("3003"), eq("13700137000"), eq("1800")
         );
         verify(userMapper, times(2)).selectOne(any());
     }

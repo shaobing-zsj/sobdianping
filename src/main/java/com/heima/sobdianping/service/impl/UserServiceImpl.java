@@ -19,7 +19,6 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -41,6 +40,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             new DefaultRedisScript<>(
                     "if redis.call('get', KEYS[1]) == ARGV[1] "
                             + "then return redis.call('del', KEYS[1]) else return 0 end",
+                    Long.class
+            );
+    private static final DefaultRedisScript<Long> SAVE_SESSION_SCRIPT =
+            new DefaultRedisScript<>(
+                    "redis.call('hset', KEYS[1], 'id', ARGV[1]); "
+                            + "redis.call('hset', KEYS[1], 'phone', ARGV[2]); "
+                            + "return redis.call('expire', KEYS[1], ARGV[3])",
                     Long.class
             );
 
@@ -105,14 +111,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
         String token = uuidSupplier.get().toString();
         String tokenKey = TOKEN_KEY_PREFIX + token;
-        Map<String, String> session = Map.of(
-                "id", user.getId().toString(),
-                "phone", user.getPhone()
+        Long sessionSaved = stringRedisTemplate.execute(
+                SAVE_SESSION_SCRIPT,
+                List.of(tokenKey),
+                user.getId().toString(),
+                user.getPhone(),
+                String.valueOf(TOKEN_TTL.getSeconds())
         );
-        stringRedisTemplate.opsForHash().putAll(tokenKey, session);
-        Boolean expirationSet = stringRedisTemplate.expire(tokenKey, TOKEN_TTL);
-        if (!Boolean.TRUE.equals(expirationSet)) {
-            stringRedisTemplate.delete(tokenKey);
+        if (!Long.valueOf(1L).equals(sessionSaved)) {
             throw new IllegalStateException("Unable to set login token expiration");
         }
 
